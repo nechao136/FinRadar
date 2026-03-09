@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  finradar:
+    build: .
+    image: finradar:latest
+    container_name: finradar_app
+    ports:
+      - "8501:8501"
+    volumes:
+      # 将宿主机的 data 文件夹挂载到容器，确保数据库文件持久化
+      - ./data:/app/data
+      # 将配置文件挂载，方便在容器外修改配置而无需重新构建镜像
+      - ./config:/app/config
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai # 设置容器时区为上海

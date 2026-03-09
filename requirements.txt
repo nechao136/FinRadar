@@ -1,0 +1,7 @@
+akshare
+pandas
+streamlit
+plotly
+pyyaml
+sqlalchemy
+requests
