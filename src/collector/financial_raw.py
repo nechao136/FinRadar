@@ -1,13 +1,14 @@
 import akshare as ak
 import pandas as pd
-import os
+from pathlib import Path
 
 
 class FinancialCollector:
     def __init__(self, data_dir="data/raw_financials"):
-        self.data_dir = data_dir
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
+        # BASE_DIR 指向项目的顶层根目录
+        self.BASE_DIR = Path(__file__).resolve().parents[2]
+        self.data_dir = self.BASE_DIR / data_dir
+        self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def fetch_individual_finance(self, report_date="20241231"):
         """
@@ -49,4 +50,4 @@ class FinancialCollector:
 
 if __name__ == "__main__":
     collector = FinancialCollector()
-    collector.fetch_individual_finance("20250930")
+    collector.fetch_individual_finance("20251231")

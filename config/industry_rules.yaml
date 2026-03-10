@@ -1,0 +1,68 @@
+# AlphaGuard 深度排雷标准 (2026专业版)
+
+# 默认规则：适用于无法定义的边缘行业
+DEFAULT:
+  debt_ratio_limit: 0.6            # 资产负债率上限
+  net_cash_ratio_min: 0.8          # 净现比 (经营现金流/净利润)
+  goodwill_to_equity_max: 0.15     # 商誉/净资产上限
+  ar_to_revenue_limit: 0.3         # 应收账款/营收上限
+  inventory_to_asset_max: 0.2      # 存货/总资产上限
+
+# A - 重资产周期 (钢铁、采矿、基础化工、电力)
+# 核心：关注债务压力与资产减值风险
+A:
+  debt_ratio_limit: 0.75
+  interest_cover_min: 3.0          # 利息保障倍数 (EBIT/利息支出)
+  current_ratio_min: 1.0           # 流动比率 (流动资产/流动负债)
+  fixed_asset_ratio_min: 0.4       # 固定资产占比 (确保真实有重资产投入)
+  da_to_ebitda_max: 4.0            # 总债务/EBITDA (偿债年限)
+  description: "重资产类重点监控偿债能力和产能利用率"
+
+# B - 轻资产成长 (半导体、软件、生物制药、军工)
+# 核心：严查研发注水、商誉雷和虚假增长
+B:
+  debt_ratio_limit: 0.4
+  goodwill_to_equity_max: 0.10
+  rd_capitalization_max: 0.15      # 研发支出资本化率 (禁止将研发费变资产)
+  rd_to_revenue_min: 0.08          # 研发投入占比 (真科技必须有真投入)
+  ar_turnover_days_max: 120        # 应收账款周转天数 (防止虚假销售回笼)
+  sales_fee_ratio_max: 0.3         # 销售费用率 (防止靠回扣或高额广告买业绩)
+  description: "科技成长类重点监控研发水分与并购黑洞"
+
+# C - 现金流消费 (食品饮料、白酒、家电、美容护理)
+# 核心：关注品牌护城河与现金回收能力
+C:
+  debt_ratio_limit: 0.5
+  net_cash_ratio_min: 1.1          # 消费类现金流应大于利润 (收现能力)
+  gross_margin_volatility_max: 0.1 # 毛利率波动率 (护城河稳定性)
+  inventory_turnover_days_max: 90  # 存货周转天数 (防止产品滞销)
+  contract_liability_min: 0.02     # 合同负债占比 (预收款，反映下游强势地位)
+  description: "消费类重点监控渠道压货与品牌溢价能力"
+
+# D - 中游制造 (汽车、机器人、光伏、通用机械)
+# 核心：关注夹缝生存的现金流与周转压力
+D:
+  debt_ratio_limit: 0.65
+  ar_to_revenue_limit: 0.45        # 允许一定账期，但需监控坏账
+  inventory_to_asset_max: 0.35
+  operating_cycle_max: 200         # 营业周期 (天)
+  fcf_to_revenue_min: 0.02         # 自由现金流占比 (扣除资本开支后要有余钱)
+  description: "制造业重点监控上下游议价权与存货积压"
+
+# E - 大金融地产 (银行、地产、证券)
+# 核心：高度警惕资产坏账与杠杆断裂
+E:
+  is_special_sector: true
+  npl_ratio_max: 0.02              # 不良贷款率上限 (银行类)
+  provision_coverage_min: 1.5      # 拨备覆盖率下限 (银行类)
+  net_debt_ratio_max: 1.0          # 净负债率 (地产类)
+  description: "金融地产类需套用专用风险评价模型"
+
+# F - 农业与公共服务 (种植养殖、环保、基建)
+# 核心：农业防造假，环保防回款
+F:
+  debt_ratio_limit: 0.7
+  net_cash_ratio_min: 1.2          # 农业和环保现金流要求更高
+  other_receivable_to_asset_max: 0.05 # 其他应收款占比 (严防大股东挪用资金)
+  asset_impairment_to_profit_max: 0.2 # 资产减值损失/利润 (防止财务洗大澡)
+  description: "农业防范资产虚构，环保防范政府欠款风险"

@@ -2,13 +2,15 @@ import akshare as ak
 import pandas as pd
 import os
 from datetime import datetime
+from pathlib import Path
 
 class StockList:
     def __init__(self, data_dir="data"):
-        self.data_dir = data_dir
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
-        self.file_path = os.path.join(self.data_dir, "stock_list.csv")
+        # BASE_DIR 指向项目的顶层根目录
+        self.BASE_DIR = Path(__file__).resolve().parents[2]
+        self.data_dir = self.BASE_DIR / data_dir
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.file_path = self.data_dir / "stock_list.csv"
 
     def fetch_all_stocks(self):
         """
