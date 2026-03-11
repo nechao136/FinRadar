@@ -1,8 +1,13 @@
 import pandas as pd
+from pathlib import Path
+
 
 class DupontAnalyser:
     def __init__(self, data_dir="data/raw_financials"):
-        self.data_dir = data_dir
+        self.df_profit = None
+        self.df_balance = None
+        self.BASE_DIR = Path(__file__).resolve().parents[2]
+        self.data_dir = self.BASE_DIR / data_dir
 
     def load_market_data(self, report_date):
         """加载全市场大表数据"""
@@ -45,26 +50,53 @@ class DupontAnalyser:
             return {
                 "代码": stock_code,
                 "名称": profit_row['股票简称'],
-                "ROE": round(roe * 100, 2), # 转为百分比
-                "净利率": round(net_margin * 100, 2),
-                "周转率": round(asset_turnover, 3),
+                "ROE(%)": round(roe * 100, 2), # 转为百分比
+                "净利率(%)": round(net_margin * 100, 2),
+                "周转率(次)": round(asset_turnover, 3),
                 "杠杆倍数": round(equity_multiplier, 2)
             }
         except Exception as e:
             print(f"计算股票 {stock_code} 时出错: {e}")
             return None
 
-    def analyze_portfolio(self, stock_list):
-        """批量分析组合"""
+    def analyze_whitelist(self, whitelist_path, report_date):
+        """核心：读取白名单并输出杜邦深度分析"""
+        print(f"正在对 {report_date} 报告期的白名单公司进行杜邦分析...")
+
+        # 1. 加载数据
+        if not self.load_market_data(report_date):
+            return
+
+        # 2. 读取白名单
+        try:
+            white_df = pd.read_csv(whitelist_path, dtype={'代码': str})
+            stock_list = white_df['代码'].tolist()
+        except Exception as e:
+            print(f"读取白名单失败: {e}")
+            return
+
+        # 3. 批量计算
         results = []
         for code in stock_list:
             res = self.calculate_stock(code)
             if res:
                 results.append(res)
-        return pd.DataFrame(results)
+
+        # 4. 生成报告并排序
+        report = pd.DataFrame(results)
+        if not report.empty:
+            # 按 ROE 从高到低排序
+            report = report.sort_values(by="ROE(%)", ascending=False)
+
+            # 保存结果
+            output_file = f"白名单杜邦深度分析_{report_date}.csv"
+            report.to_csv(output_file, index=False, encoding='utf-8-sig')
+            print(f"分析完成！结果已存入: {output_file}")
+            print("\n--- ROE 前 10 名企业预览 ---")
+            print(report.head(10))
     
 
 if __name__ == "__main__":
     analyser = DupontAnalyser()
     analyser.load_market_data("20250930")
-    print(analyser.calculate_stock("600362"))
+    print(analyser.analyze_whitelist("排雷结果_白名单.csv", "20250930"))

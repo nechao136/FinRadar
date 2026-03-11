@@ -26,13 +26,15 @@ class RiskScanner:
         logic = self.ind_mgr.get_stock_logic(stock_code)
         nature_id = logic['nature_id']
         rule = logic['config']
+        industry = logic['industry']
 
         if rule.get('is_special_sector'):
-            return {"status": "SKIP", "reason": "金融类需人工核查"}
+            return self._scan_financial_sector(stock_code, industry)
 
         # 2. 收集 5 年数据 (从 2020 到 2024, 假设 2025 年报还未全)
         years = ["20201231", "20211231", "20221231", "20231231", "20241231"]
         warnings = []
+        valid_years = 0
 
         for date in years:
             df_year = self.collector.get_stock_metrics(stock_code, date)
@@ -40,47 +42,108 @@ class RiskScanner:
                 continue
 
             # 提取数据行（只有一行）
+            valid_years += 1
             data = df_year.iloc[0]
             year_label = date[:4]
 
-            # --- 精准取值 ---
-            # 偿债能力 (资产负债表字段)
-            debt_ratio = data.get('资产负债率', 0)
-            # 盈利质量 (利润表 vs 现金流量表字段)
+            # --- 核心字段提取 ---
             net_profit = data.get('净利润', 0)
             op_cash_flow = data.get('经营性现金流-现金流量净额', 0)
-            # 资产风险(资产负债表字段)
-            # 注意：你提供的表头中没有明确写“商誉”，通常在总资产详情中，
-            # 如果暂无商誉字段，我们可以先监控“应收账款”占比
+            equity = data.get('股东权益合计', 1)
+            revenue = data.get('营业总收入', 1)
+            op_cost = data.get('营业总支出-营业支出', 0)
+            inventory = data.get('资产-存货', 0)
             ar_amount = data.get('资产-应收账款', 0)
-            total_assets = data.get('资产-总资产', 1)  # 避开除以0值
+            total_assets = data.get('资产-总资产', 1)
+            debt_ratio = data.get('资产负债率', 0)
+            capex = data.get('投资性现金流-现金流量净额', 0)
+            # 商誉通常在‘资产-总资产’的明细里，如果你的表头没抓取，可暂设为0或后续补充
+            goodwill = data.get('资产-商誉', 0)
 
-            # --- 开始排雷逻辑 ---
+            # --- 全维度排雷算法 ---
 
-            # 1. 负债率检查 (百分比数值)
-            debt_limit = rule.get('debt_ratio_limit', 0.6) * 100
-            if debt_ratio > debt_limit:
-                warnings.append(f"{year_label}负债率过高({round(debt_ratio, 1)}%)")
+            # 1. ROE (核心盈利)
+            roe = (net_profit / equity) * 100
+            if roe < 8: warnings.append(f"{year_label}ROE过低({round(roe, 1)}%)")
 
-            # 2. 净现比检查 (盈利质量)
-            net_cash_ratio_min = rule.get('net_cash_ratio_min', 0.7)
+            # 2. 净现比 (利润质量)
             if net_profit > 0:
-                actual_ratio = op_cash_flow / net_profit
-                if actual_ratio < net_cash_ratio_min:
-                    warnings.append(f"{year_label}净现比过低({round(actual_ratio, 2)})")
-            elif net_profit < 0 and op_cash_flow < 0:
-                warnings.append(f"{year_label}经营性亏损(利润与现金流双负)")
+                actual_cash_ratio = op_cash_flow / net_profit
+                if actual_cash_ratio < 0.8: warnings.append(f"{year_label}净现比过低({round(actual_cash_ratio, 2)})")
+            else:
+                warnings.append(f"{year_label}利润亏损")
 
-            # 3. 应收账款占比检查 (替代商誉检查，防止虚增营收)
-            ar_limit = rule.get('ar_to_revenue_limit', 0.4)
-            if ar_amount / total_assets > ar_limit:
-                warnings.append(f"{year_label}应收账款占比过高({round((ar_amount / total_assets) * 100, 1)}%)")
+            # 3. 负债率 (财务杠杆)
+            debt_limit = rule.get('debt_ratio_limit', 0.6) * 100
+            if debt_ratio > debt_limit: warnings.append(f"{year_label}负债率过高({round(debt_ratio, 1)}%)")
+
+            # 4. 毛利率 (产品竞争力)
+            gross_margin = ((revenue - op_cost) / revenue) * 100
+            if gross_margin < 15: warnings.append(f"{year_label}毛利过低({round(gross_margin, 1)}%)")
+
+            # 5. 应收账款 (回款风险)
+            if ar_amount / total_assets > 0.3: warnings.append(
+                f"{year_label}应收占比高({round((ar_amount / total_assets) * 100, 1)}%)")
+
+            # 6. 存货占比 (减值风险)
+            if inventory / total_assets > 0.4: warnings.append(
+                f"{year_label}存货堆积({round((inventory / total_assets) * 100, 1)}%)")
+
+            # 7. 自由现金流 (FCF - 真实造血)
+            fcf = op_cash_flow + capex
+            if fcf < 0 < net_profit: warnings.append(f"{year_label}FCF为负(碎钞机)")
+
+            # 8. 商誉风险 (如果存在)
+            if goodwill / equity > 0.2: warnings.append(f"{year_label}商誉炸弹({round((goodwill / equity) * 100, 1)}%)")
+
+        # 确保至少有 3 年以上数据，否则视为新股不进白名单
+        if valid_years < 3:
+            warnings.append("存续数据不足3年")
 
         return {
             "status": "DANGER" if warnings else "PASS",
             "warnings": warnings,
             "industry": logic['industry'],
             "nature_id": nature_id
+        }
+
+    def _scan_financial_sector(self, stock_code, industry):
+        """
+        金融类深度筛选：5年连续体检
+        """
+        years = ["20201231", "20211231", "20221231", "20231231", "20241231"]
+        warnings = []
+        prev_equity = None  # 用于比较净资产增长
+
+        for date in years:
+            df_year = self.collector.get_stock_metrics(stock_code, date)
+            if df_year.empty: continue
+
+            data = df_year.iloc[0]
+            year_label = date[:4]
+
+            # 1. 盈利能力 (ROE)
+            equity = data.get('股东权益合计', 1)
+            net_profit = data.get('净利润', 0)
+            roe = (net_profit / equity) * 100
+
+            if roe < 6:
+                warnings.append(f"{year_label}回报过低(ROE:{round(roe, 1)}%)")
+
+            # 2. 净资产成长性 (检查是否在“缩水”)
+            if prev_equity is not None:
+                if equity < prev_equity * 0.98:  # 允许 2% 的波动，防止由于分红导致的微调
+                    warnings.append(f"{year_label}净资产萎缩(较上年减少)")
+            prev_equity = equity
+
+            # 3. 现金红利 (可选：如果你的表头有‘分红’字段)
+            # data.get('派现', 0) ...
+
+        return {
+            "status": "DANGER" if warnings else "PASS",
+            "warnings": warnings,
+            "industry": industry,
+            "nature_id": "E"
         }
 
 

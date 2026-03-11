@@ -84,4 +84,9 @@ class FinancialCollector:
 
 if __name__ == "__main__":
     collector = FinancialCollector()
-    collector.fetch_individual_finance("20251231")
+    years = ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025']
+    month = ['0331', '0630', '0930', '1231']
+    all_reports = [y + m for y in years for m in month]
+    for date in all_reports:
+        collector.fetch_individual_finance(date)
+
